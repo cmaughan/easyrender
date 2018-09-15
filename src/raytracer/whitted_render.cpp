@@ -11,6 +11,7 @@
 #define MAX_DEPTH 3
 
 std::vector<std::shared_ptr<SceneObject>> sceneObjects;
+std::vector<std::shared_ptr<SceneObject>> lightObjects;
 std::shared_ptr<Camera> pCamera;
 std::shared_ptr<Manipulator> pManipulator;
 BufferData* screenBufferData;
@@ -20,12 +21,15 @@ bool pause = false;
 bool step = true;
 int currentSample = 0;
 int partitions = std::thread::hardware_concurrency();
+float bias = 0.001f;
+glm::vec3 backgroundColor = glm::vec3{ 0.0f, 0.0f, 0.0f };
 
 void render_init()
 {
     deviceParams.pName = "Whitted Ray Tracer";
 
     sceneObjects.clear();
+    lightObjects.clear();
 
     // Red ball
     Material mat;
@@ -51,14 +55,14 @@ void render_init()
     mat.albedo = glm::vec3(1.0f, 1.0f, 1.0f);
     mat.specular = glm::vec3(0.0f, 0.0f, 0.0f);
     mat.reflectance = .0f;
-    mat.emissive = glm::vec3(0.0f, 0.8f, 0.8f);
+    mat.emissive = glm::vec3(0.6f, 0.8f, 0.8f);
     sceneObjects.push_back(std::make_shared<Sphere>(mat, glm::vec3(2.8f, 0.8f, 2.0f), 0.8f));
 
     // White light
     mat.albedo = glm::vec3(0.0f, 0.8f, 0.0f);
     mat.specular = glm::vec3(0.0f, 0.0f, 0.0f);
     mat.reflectance = 0.0f;
-    mat.emissive = glm::vec3(1.0f, 1.0f, 1.0f);
+    mat.emissive = glm::vec3(.6f, 0.6f, 0.6f);
     sceneObjects.push_back(std::make_shared<Sphere>(mat, glm::vec3(-0.8f, 10.4f, 8.0f), 1.0f));
 
     sceneObjects.push_back(std::make_shared<TiledPlane>(glm::vec3(0.0f, 0.0f, 0.0f), normalize(glm::vec3(0.0f, 1.0f, 0.0f))));
@@ -98,104 +102,77 @@ glm::vec3 TraceRay(const glm::vec3& rayorig, const glm::vec3 &raydir, const int 
 {
     const SceneObject* nearestObject = nullptr;
     float distance;
-    nearestObject = FindNearestObject(rayorig, raydir, distance);
 
+    glm::vec3 outputColor = backgroundColor;
+
+    // Too deep
+    if (depth > MAX_DEPTH)
+    {
+        return outputColor;
+    }
+
+    nearestObject = FindNearestObject(rayorig, raydir, distance);
     if (!nearestObject)
     {
-        return glm::vec3{ 0.2f, 0.2f, 0.2f };
+        // Didn't hit an object, so return background color
+        return outputColor;
     }
-    glm::vec3 pos = rayorig + (raydir * distance);
-    glm::vec3 normal = nearestObject->GetSurfaceNormal(pos);
-    glm::vec3 outputColor{ 0.0f, 0.0f, 0.0f };
 
-    const Material& material = nearestObject->GetMaterial(pos);
+    // Where we hit on the surface
+    glm::vec3 hit_point = rayorig + (raydir * distance);
 
-    glm::vec3 reflect = glm::normalize(glm::reflect(raydir, normal));
+    glm::vec3 normal = nearestObject->GetSurfaceNormal(hit_point);
+    const Material& material = nearestObject->GetMaterial(hit_point);
 
-    // If the object is transparent, get the reflection color
-    if (depth < MAX_DEPTH && (material.reflectance > 0.0f))
+    if (material.reflectance > 0.0f)
     {
-        glm::vec3 reflectColor(0.0f, 0.0f, 0.0f);
-        glm::vec3 refractColor(0.0f, 0.0f, 0.0f);
+        //float kr; 
+        //fresnel(dir, N, hitObject->ior, kr); 
 
-        reflectColor = TraceRay(pos + (reflect * 0.001f), reflect, depth + 1);
-        outputColor = (reflectColor * material.reflectance);
+        glm::vec3 reflect_direction = glm::reflect(raydir, normal);
+        glm::vec3 reflect_origin;
+        auto reflect_start = (glm::dot(reflect_direction, normal) > 0) ? (hit_point + normal * bias) : (hit_point - normal * bias);
+
+        outputColor += TraceRay(reflect_start, reflect_direction, depth + 1) * material.reflectance;
     }
-    // For every emitter, gather the light
-    for (auto& emitterObj : sceneObjects)
+
     {
-        glm::vec3 emitterDir = emitterObj->GetRayFrom(pos);
+        glm::vec3 light_accumulation = glm::vec3(0.0f);
 
-        float bestDistance = std::numeric_limits<float>::max();
-        SceneObject* pOccluder = nullptr;
-        const Material* pEmissiveMat = nullptr;
-        for (auto& occluder : sceneObjects)
+        // For every emitter, gather the light
+        for (auto& emitterObj : sceneObjects)
         {
-            if (occluder->Intersects(pos + (emitterDir * 0.001f), emitterDir, distance))
+            // Find the part of the object we hit
+            glm::vec3 emitterDir = emitterObj->GetRayFrom(hit_point);
+            float light_distance;
+       
+            // Move hit point out slightly
+            auto light_origin = (glm::dot(raydir, normal) < 0) ? (hit_point + normal * bias) : (hit_point - normal * bias);
+
+            emitterObj->Intersects(light_origin + (emitterDir * bias), emitterDir, light_distance);
+            auto lightMaterial = emitterObj->GetMaterial(hit_point + emitterDir * light_distance);
+
+            if (lightMaterial.emissive == glm::vec3(0.0f))
+                continue;
+
+            float shadowFactor = 0.0f;
+            float nearestDistance;
+            auto nearestOccluder = FindNearestObject(light_origin, emitterDir, nearestDistance);
+            if (nearestOccluder == nullptr || 
+                nearestDistance > (light_distance))// - bias))
             {
-                if (occluder == emitterObj)
-                {
-                    if (bestDistance > distance)
-                    {
-                        bestDistance = distance;
-
-                        // If we found our emitter, and the point we hit is not emissive, then ignore
-                        pEmissiveMat = &occluder->GetMaterial(pos + (emitterDir * distance));
-                        if (pEmissiveMat->emissive == glm::vec3(0.0f, 0.0f, 0.0f))
-                        {
-                            pEmissiveMat = nullptr;
-                        }
-                        else
-                        {
-                            pOccluder = nullptr;
-                        }
-                    }
-                }
-                else
-                {
-                    if (bestDistance > distance)
-                    {
-                        pOccluder = occluder.get();
-                        pEmissiveMat = nullptr;
-                        bestDistance = distance;
-                    }
-                }
+                shadowFactor = 1.0f;
             }
+
+            float l_dot_n = std::max(0.0f, dot(normal, emitterDir));
+            light_accumulation += (shadowFactor) * lightMaterial.emissive * l_dot_n; 
+
+            //Vec3f reflectionDirection = reflect(-lightDir, N); 
+            //specularColor += powf(std::max(0.f, -dotProduct(reflectionDirection, dir)), hitObject->specularExponent) * lights[i]->intensity;
+
         }
-
-        // No emissive material, or occluder
-        if (!pEmissiveMat || pOccluder)
-        {
-            continue;
-        }
-
-        float diffuseI = 0.0f;
-        float specI = 0.0f;
-
-        diffuseI = dot(normal, emitterDir);// / (bestDistance * .1f);
-
-        if (diffuseI > 0.0f)
-        {
-            specI = dot(reflect, emitterDir);
-            if (specI > 0.0f)
-            {
-                specI = pow(specI, 10);
-                specI = std::max(0.0f, specI);
-
-            }
-            else
-            {
-                specI = 0.0f;
-            }
-        }
-        else
-        {
-            diffuseI = 0.0f;
-        }
-        outputColor += (pEmissiveMat->emissive * material.albedo * diffuseI) + (material.specular * specI);
+        outputColor += (light_accumulation * material.albedo) + material.emissive + (material.specular * 0.0f);
     }
-    outputColor *= 1.f - material.reflectance;
-    outputColor += material.emissive;
     return outputColor;
 }
 
