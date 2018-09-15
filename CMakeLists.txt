@@ -36,7 +36,7 @@ src/render.h
 # Ray Tracer
 SET(RAYTRACER_SOURCES 
 ${COMMON_SOURCES}
-src/raytracer/ray_render.cpp
+src/raytracer/whitted_render.cpp
 src/raytracer/sceneobjects.h
 )
 INCLUDE_DIRECTORIES(src/raytracer)

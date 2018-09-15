@@ -23,7 +23,7 @@ int partitions = std::thread::hardware_concurrency();
 
 void render_init()
 {
-    deviceParams.pName = "Ray Tracer";
+    deviceParams.pName = "Whitted Ray Tracer";
 
     sceneObjects.clear();
 
