@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <windows.h>
 #include <windowsx.h>
 
@@ -13,30 +14,78 @@ using namespace Gdiplus;
 #include "device.h"
 #include "render.h"
 
-BufferData bufferData;
-
 namespace
 {
 HWND hWnd;
-std::shared_ptr<Bitmap> spBitmap;
+std::shared_ptr<Bitmap> spDisplayBitmap;
 }
 
-void device_copy_buffer()
-{
-    if (spBitmap)
-    {
-        auto pData = &bufferData.buffer[0];
+DeviceParams deviceParams;
 
+BufferData* device_buffer_create(int width, int height)
+{
+    auto pBuffer = (BufferData*)malloc(sizeof(BufferData));
+    pBuffer->buffer = nullptr;
+    pBuffer->BufferWidth = 0;
+    pBuffer->BufferHeight = 0;
+
+    if (width == 0 || height == 0)
+    {
+        device_buffer_ensure_screen_size(pBuffer);
+    }
+    else
+    {
+        device_buffer_resize(pBuffer, width, height);
+    }
+    return pBuffer;
+}
+
+void device_buffer_destroy(BufferData* pBuffer)
+{
+    free(pBuffer->buffer);
+    free(pBuffer);
+}
+
+void device_buffer_ensure_screen_size(BufferData* pData)
+{
+    if (pData->BufferHeight != spDisplayBitmap->GetHeight() ||
+        pData->BufferWidth != spDisplayBitmap->GetWidth() ||
+        pData->buffer == nullptr)
+    {
+        device_buffer_resize(pData, spDisplayBitmap->GetWidth(), spDisplayBitmap->GetHeight());
+    }
+}
+
+void device_buffer_resize(BufferData* pData, int width, int height)
+{
+    if (pData->buffer == nullptr ||
+        pData->BufferWidth != width ||
+        pData->BufferHeight != height)
+    {
+        pData->BufferHeight = height;
+        pData->BufferWidth = width;
+        if (pData->buffer)
+        {
+            free(pData->buffer);
+        }
+        pData->buffer = (glm::vec4*)malloc(sizeof(glm::vec4) * pData->BufferHeight * pData->BufferWidth);
+    }
+}
+
+void device_copy_buffer(BufferData* data)
+{
+    if (spDisplayBitmap)
+    {
         BitmapData writeData;
-        Rect lockRect(0, 0, bufferData.BufferWidth, bufferData.BufferHeight);
-        if (spBitmap->LockBits(&lockRect, ImageLockModeWrite, PixelFormat32bppARGB, &writeData) == 0)
+        Rect lockRect(0, 0, data->BufferWidth, data->BufferHeight);
+        if (spDisplayBitmap->LockBits(&lockRect, ImageLockModeWrite, PixelFormat32bppARGB, &writeData) == 0)
         {
             for (int y = 0; y < int(writeData.Height); y++)
             {
                 for (auto x = 0; x < int(writeData.Width); x++)
                 {
                     glm::u8vec4* pTarget = (glm::u8vec4*)((uint8_t*)writeData.Scan0 + (y * writeData.Stride) + (x * 4));
-                    glm::vec4 source = bufferData.buffer[(y * bufferData.BufferWidth) + x];
+                    glm::vec4 source = data->buffer[(y * data->BufferWidth) + x];
                     source = glm::clamp(source, glm::vec4(0.0f), glm::vec4(1.0f));
 
                     source = glm::u8vec4(source * 255.0f);
@@ -44,7 +93,7 @@ void device_copy_buffer()
                 }
             }
 
-            spBitmap->UnlockBits(&writeData);
+            spDisplayBitmap->UnlockBits(&writeData);
         }
     }
     InvalidateRect(hWnd, NULL, TRUE);
@@ -53,19 +102,28 @@ void device_copy_buffer()
 VOID OnPaint(HDC hdc)
 {
     Graphics graphics(hdc);
-
     graphics.SetSmoothingMode(SmoothingMode::SmoothingModeDefault);
     graphics.SetInterpolationMode(Gdiplus::InterpolationModeNearestNeighbor);
     graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
 
-    RectF dest;
-    dest.X = 0;
-    dest.Y = 0;
-    dest.Width = float(bufferData.BufferWidth);
-    dest.Height = float(bufferData.BufferHeight);
-    if (spBitmap)
+    if (spDisplayBitmap)
     {
-        graphics.DrawImage(spBitmap.get(), dest, 0.0f, 0.0f, float(bufferData.BufferWidth), float(bufferData.BufferHeight), Unit(UnitPixel));
+        RectF dest;
+        dest.X = 0;
+        dest.Y = 0;
+        dest.Width = float(spDisplayBitmap->GetWidth());
+        dest.Height = float(spDisplayBitmap->GetHeight());
+
+        deviceParams.zoomFactor = std::max(.1f, deviceParams.zoomFactor);
+        deviceParams.zoomFactor = std::min(10.0f, deviceParams.zoomFactor);
+        deviceParams.offset = glm::clamp(deviceParams.offset, glm::vec2(0.0f), glm::vec2(1.0f));
+
+        float sourceWidth = (float)spDisplayBitmap->GetWidth();
+        float sourceHeight = (float)spDisplayBitmap->GetHeight();
+        sourceWidth /= deviceParams.zoomFactor;
+        sourceHeight /= deviceParams.zoomFactor;
+
+        graphics.DrawImage(spDisplayBitmap.get(), dest, sourceWidth * deviceParams.offset.x, sourceHeight * deviceParams.offset.y, sourceWidth, sourceHeight, Unit(UnitPixel));
     }
     else
     {
@@ -80,14 +138,10 @@ void size_changed()
 
     int x = rc.right - rc.left;
     int y = rc.bottom - rc.top;
-    
-    bufferData.BufferWidth = x;
-    bufferData.BufferHeight = y;
 
-    spBitmap = std::make_shared<Bitmap>(bufferData.BufferWidth, bufferData.BufferHeight, PixelFormat32bppPARGB);
-    bufferData.buffer.resize(bufferData.BufferWidth * bufferData.BufferHeight, glm::vec4(0));
+    spDisplayBitmap = std::make_shared<Bitmap>(x, y, PixelFormat32bppPARGB);
 
-    render_resized();
+    render_resized(x, y);
 }
 
 bool device_is_key_down(DeviceKeyType type)
@@ -99,7 +153,7 @@ bool device_is_key_down(DeviceKeyType type)
     return false;
 }
 
-//            SetWindowTextA(hWnd, std::to_string(currentSample).c_str());
+//  SetWindowTextA(hWnd, std::to_string(currentSample).c_str());
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message,
     WPARAM wParam, LPARAM lParam)
 {
@@ -125,7 +179,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message,
         switch (LOWORD(wParam))
         {
         case SC_MAXIMIZE:
-            spBitmap.reset();
+            spDisplayBitmap.reset();
             break;
         default:
             break;
@@ -161,7 +215,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message,
 
     case WM_SIZE:
     {
-        spBitmap.reset();
+        spDisplayBitmap.reset();
     }
     break;
 
@@ -175,7 +229,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message,
         return 0;
 
     case WM_DESTROY:
-        spBitmap.reset();
+        spDisplayBitmap.reset();
         PostQuitMessage(0);
         return 0;
 
@@ -195,6 +249,8 @@ INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, PSTR, INT iCmdShow)
     // Initialize GDI+.
     GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
 
+    render_init();
+
     wndClass.style = CS_HREDRAW | CS_VREDRAW;
     wndClass.lpfnWndProc = WndProc;
     wndClass.cbClsExtra = 0;
@@ -204,7 +260,7 @@ INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, PSTR, INT iCmdShow)
     wndClass.hCursor = LoadCursor(NULL, IDC_ARROW);
     wndClass.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
     wndClass.lpszMenuName = NULL;
-    wndClass.lpszClassName = TEXT("RayTracer");
+    wndClass.lpszClassName = TEXT(deviceParams.pName);
 
     RegisterClass(&wndClass);
 
@@ -214,8 +270,8 @@ INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, PSTR, INT iCmdShow)
     int nScreenHeight = GetSystemMetrics(SM_CYSCREEN);
 
     hWnd = CreateWindow(
-        TEXT("RayTracer"),   // window class name
-        TEXT("RayTracer"),  // window caption
+        TEXT(deviceParams.pName),   // window class name
+        TEXT(deviceParams.pName),  // window caption
         WS_OVERLAPPEDWINDOW,      // window style
         (nScreenWidth / 2) - (WindowSize / 2),            // initial x position
         (nScreenHeight / 2) - (WindowSize / 2),            // initial y position
@@ -229,12 +285,9 @@ INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, PSTR, INT iCmdShow)
     ShowWindow(hWnd, iCmdShow);
     UpdateWindow(hWnd);
 
-    render_init();
-
     msg.message = 0;
     while (WM_QUIT != msg.message)
     {
-        render_update();
 
         if (PeekMessage(&msg, NULL, NULL, NULL, PM_REMOVE))
         {
@@ -246,10 +299,11 @@ INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, PSTR, INT iCmdShow)
         }
         else
         {
-            if (spBitmap == nullptr)
+            if (spDisplayBitmap == nullptr)
             {
                 size_changed();
             }
+            render_update();
             render_redraw();
         }
     }

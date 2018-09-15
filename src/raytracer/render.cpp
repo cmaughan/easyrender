@@ -13,6 +13,7 @@
 std::vector<std::shared_ptr<SceneObject>> sceneObjects;
 std::shared_ptr<Camera> pCamera;
 std::shared_ptr<Manipulator> pManipulator;
+BufferData* screenBufferData;
 
 float cameraDistance = 8.0f;
 bool pause = false;
@@ -20,13 +21,10 @@ bool step = true;
 int currentSample = 0;
 int partitions = std::thread::hardware_concurrency();
 
-void render_on_resize()
-{
-    currentSample = 0;
-}
-
 void render_init()
 {
+    deviceParams.pName = "Ray Tracer";
+
     sceneObjects.clear();
 
     // Red ball
@@ -206,8 +204,11 @@ void render_update()
 
 void render_redraw()
 {
-    if (bufferData.buffer.empty())
-        return;
+    if (!screenBufferData)
+    {
+        screenBufferData = device_buffer_create();
+        device_buffer_ensure_screen_size(screenBufferData);
+    }
 
     auto t = time(NULL);
     std::srand(currentSample == 0 ? 0 : (unsigned int)t);
@@ -221,9 +222,9 @@ void render_redraw()
     {
         auto pT = std::make_shared<std::thread>([&](int offset)
         {
-            for (int y = offset; y < bufferData.BufferHeight; y += partitions)
+            for (int y = offset; y < screenBufferData->BufferHeight; y += partitions)
             {
-                for (int x = 0; x < bufferData.BufferWidth; x += 1)
+                for (int x = 0; x < screenBufferData->BufferWidth; x += 1)
                 {
                     glm::vec3 color{ 0.0f, 0.0f, 0.0f };
                     auto offset = sample + glm::vec2(x, y);
@@ -231,8 +232,8 @@ void render_redraw()
                     auto ray = pCamera->GetWorldRay(offset);
                     color += TraceRay(ray.position, ray.direction, 0);
 
-                    auto index = (y * bufferData.BufferWidth) + x;
-                    auto& bufferVal = bufferData.buffer[index];
+                    auto index = (y * screenBufferData->BufferWidth) + x;
+                    auto& bufferVal = screenBufferData->buffer[index];
 
                     bufferVal = ((bufferVal * k1) + glm::vec4(color, 1.0f)) * k2;
                 }
@@ -247,18 +248,17 @@ void render_redraw()
     }
     currentSample++;
 
-    device_copy_buffer();
+    device_copy_buffer(screenBufferData);
 }
 
-void render_resized()
+void render_resized(int x, int y)
 {
-    pCamera->SetFilmSize(float(bufferData.BufferWidth), float(bufferData.BufferHeight));
+    pCamera->SetFilmSize(float(x), float(y));
     currentSample = 0;
 }
 
 void render_key_pressed(char key)
 {
-
     if (key == 'o')
     {
         currentSample = 0;
@@ -273,8 +273,24 @@ void render_key_pressed(char key)
     }
     else if (key == 'b')
     {
-        auto pBitmap = bitmap_create_from_buffer(bufferData);
+        auto pBitmap = bitmap_create_from_buffer(screenBufferData->buffer, screenBufferData->BufferWidth, screenBufferData->BufferHeight);
         bitmap_write(pBitmap, "rayout.bmp");
+    }
+    else if (key == '+')
+    {
+        deviceParams.zoomFactor += .1f;
+    }
+    else if (key == '-')
+    {
+        deviceParams.zoomFactor -= .1f;
+    }
+    else if (key == 'd')
+    {
+        deviceParams.offset.x += .1f;
+    }
+    else if (key == 'a')
+    {
+        deviceParams.offset.x -= .1f;
     }
 }
 

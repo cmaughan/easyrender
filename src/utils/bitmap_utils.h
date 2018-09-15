@@ -27,16 +27,16 @@ static Bitmap* bitmap_create(int width, int height)
     return pBitmap;
 }
 
-static Bitmap* bitmap_create_from_buffer(BufferData& data)
+static Bitmap* bitmap_create_from_buffer(glm::vec4* buffer, int width, int height)
 {
-    auto pBitmap = bitmap_create(data.BufferWidth, data.BufferHeight);
+    auto pBitmap = bitmap_create(width, height);
 
-    for (int y = 0; y < int(data.BufferHeight); y++)
+    for (int y = 0; y < height; y++)
     {
-        for (auto x = 0; x < int(data.BufferWidth); x++)
+        for (auto x = 0; x < width; x++)
         {
             Color* pTarget = ((Color*)pBitmap->pData) + (y * pBitmap->width) + (x);
-            glm::vec4 source = data.buffer[(y * bufferData.BufferWidth) + x];
+            glm::vec4 source = buffer[(y * width) + x];
             source = glm::clamp(source, glm::vec4(0.0f), glm::vec4(1.0f));
            
             // BufferData is RGB!
