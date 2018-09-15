@@ -69,6 +69,12 @@ void render_init()
     pManipulator = std::make_shared<Manipulator>(pCamera);
 }
 
+void render_destroy()
+{
+    device_buffer_destroy(screenBufferData);
+    screenBufferData = nullptr;
+}
+
 SceneObject* FindNearestObject(glm::vec3 rayorig, glm::vec3 raydir, float& nearestDistance)
 {
     SceneObject* nearestObject = nullptr;
@@ -248,7 +254,7 @@ void render_redraw()
     }
     currentSample++;
 
-    device_copy_buffer(screenBufferData);
+    device_buffer_set_to_display(screenBufferData);
 }
 
 void render_resized(int x, int y)

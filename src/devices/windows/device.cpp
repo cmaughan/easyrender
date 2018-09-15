@@ -72,7 +72,7 @@ void device_buffer_resize(BufferData* pData, int width, int height)
     }
 }
 
-void device_copy_buffer(BufferData* data)
+void device_buffer_set_to_display(BufferData* data)
 {
     if (spDisplayBitmap)
     {
@@ -307,6 +307,7 @@ INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, PSTR, INT iCmdShow)
             render_redraw();
         }
     }
+    render_destroy();
 
     GdiplusShutdown(gdiplusToken);
 

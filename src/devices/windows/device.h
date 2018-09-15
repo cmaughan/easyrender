@@ -27,7 +27,7 @@ BufferData* device_buffer_create(int width = 0, int height = 0);
 void device_buffer_destroy(BufferData* pData);
 void device_buffer_ensure_screen_size(BufferData* pData);
 void device_buffer_resize(BufferData* pData, int width, int height);
-void device_copy_buffer(BufferData* buffer);
+void device_buffer_set_to_display(BufferData* buffer);
 bool device_is_key_down(DeviceKeyType type);
 
 

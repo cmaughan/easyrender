@@ -12,6 +12,12 @@ void render_init()
     deviceParams.pName = "Sample Empty Demo";
 }
 
+void render_destroy()
+{
+    device_buffer_destroy(screenBufferData);
+    screenBufferData = nullptr;
+}
+
 void render_update()
 {
 }
@@ -20,13 +26,10 @@ void render_redraw()
 {
     auto pData = screenBufferData->buffer;
 
-    // Access a single value
-    auto at = [pData](int x, int y) -> glm::vec4& 
-    {
-        return pData[y * screenBufferData->BufferWidth + x];
-    };
+    // This function called every frame, so lets make something that moves
+    static float offset = .1f;
+    offset += .005f;
 
-    // Fill with an array of values
     for (int y = 0; y < screenBufferData->BufferHeight; y++)
     {
         for (int x = 0; x < screenBufferData->BufferWidth; x++)
@@ -34,16 +37,28 @@ void render_redraw()
             float xf = x / (float)screenBufferData->BufferWidth;
             float yf = y / (float)screenBufferData->BufferHeight;
 
+            xf += offset;
+            yf += offset;
+
+            // Access a single value
+            auto at = [pData](int x, int y) -> glm::vec4& 
+            {
+                return pData[y * screenBufferData->BufferWidth + x];
+            };
+
             // Fill with a color gradient...
             //at(x, y) = glm::vec4(xf, yf, 1.0f, 1.0f);
             // or .. some noise
+            // NOTE: This is CPU rendering, and unoptimized at that.
+            // If you want speed, you need to think about how uch work you are doing per pixel, and 
+            // if you could thread the rendering to parallelize it (see the raytrace sample)
             at(x, y) = glm::vec4(glm::perlin(glm::vec2(xf * 4, yf * 4)),
                 glm::perlin(glm::vec2(xf * 6, yf * 6)),
                 glm::perlin(glm::vec2(xf * 12, yf * 12)), 1.0f);
         }
     }
 
-    device_copy_buffer(screenBufferData);
+    device_buffer_set_to_display(screenBufferData);
 }
 
 void render_resized(int x, int y)

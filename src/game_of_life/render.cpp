@@ -26,6 +26,12 @@ void render_init()
     deviceParams.pName = "Game Of Life";
 }
 
+void render_destroy()
+{
+    device_buffer_destroy(screenBufferData);
+    screenBufferData = nullptr;
+}
+
 void render_update()
 {
     if (screenBufferData == nullptr)
@@ -94,7 +100,7 @@ void render_redraw()
     }
 
     // Copy the buffer to the display staging area
-    device_copy_buffer(screenBufferData);
+    device_buffer_set_to_display(screenBufferData);
 }
 
 void render_resized(int x, int y)

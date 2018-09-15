@@ -4,6 +4,7 @@
 void render_resized(int x, int y);
 void render_redraw();
 void render_init();
+void render_destroy();
 void render_update();
 void render_redraw();
 void render_key_pressed(char key);
