@@ -30,13 +30,13 @@ SET(COMMON_SOURCES
 src/utils/camera.h
 src/utils/camera_manipulator.h
 src/utils/bitmap_utils.h
+src/render.h
 )
 
 # Ray Tracer
 SET(RAYTRACER_SOURCES 
 ${COMMON_SOURCES}
-src/raytracer/render.cpp
-src/raytracer/render.h
+src/raytracer/ray_render.cpp
 src/raytracer/sceneobjects.h
 )
 INCLUDE_DIRECTORIES(src/raytracer)
@@ -45,7 +45,6 @@ ADD_EXECUTABLE (raytracer WIN32 ${RAYTRACER_SOURCES} ${DEVICE_SOURCES}) # Win32 
 # Empty example
 SET(EMPTY_SOURCES 
 src/empty/render.cpp
-src/empty/render.h
 src/utils/bitmap_utils.h
 )
 INCLUDE_DIRECTORIES(src/empty)
@@ -53,8 +52,7 @@ ADD_EXECUTABLE (empty WIN32 ${EMPTY_SOURCES} ${DEVICE_SOURCES}) # Win32 ignored 
 
 # Game of Life example
 SET(GOL_SOURCES 
-src/game_of_life/render.cpp
-src/game_of_life/render.h
+src/game_of_life/life_render.cpp
 )
 INCLUDE_DIRECTORIES(src/game_of_life)
 ADD_EXECUTABLE (game_of_life WIN32 ${GOL_SOURCES} ${DEVICE_SOURCES}) # Win32 ignored on non-windows
