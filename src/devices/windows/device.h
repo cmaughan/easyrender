@@ -15,11 +15,7 @@ struct BufferData
 };
 
 extern BufferData bufferData;
-
-void device_show();
-void device_init();
 void device_copy_buffer();
-
 bool device_is_key_down(DeviceKeyType type);
 
 
