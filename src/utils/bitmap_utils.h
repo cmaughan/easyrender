@@ -35,11 +35,15 @@ static Bitmap* bitmap_create_from_buffer(BufferData& data)
     {
         for (auto x = 0; x < int(data.BufferWidth); x++)
         {
-            glm::u8vec4* pTarget = (glm::u8vec4*)((uint8_t*)pBitmap->pData + (y * pBitmap->width * sizeof(uint32_t) ) + (x * sizeof(uint32_t)));
+            Color* pTarget = ((Color*)pBitmap->pData) + (y * pBitmap->width) + (x);
             glm::vec4 source = data.buffer[(y * bufferData.BufferWidth) + x];
             source = glm::clamp(source, glm::vec4(0.0f), glm::vec4(1.0f));
-            source = glm::u8vec4(source * 255.0f);
-            *pTarget = source;
+           
+            // BufferData is RGB!
+            auto converted = glm::u8vec3(source * 255.0f);
+            pTarget->blue = converted.r;
+            pTarget->green = converted.g;
+            pTarget->red = converted.b;
         }
     }
     return pBitmap;
@@ -105,7 +109,7 @@ This rather hacky function to write a bitmap is taken from here.
 Just give it the size of your array and the RGB (24Bit)
 https://en.wikipedia.org/wiki/User:Evercat/Buddhabrot.c
 */
-static void write_bitmap(Bitmap* pBitmap, char * filename)
+static void bitmap_write(Bitmap* pBitmap, char * filename)
 {
     uint32_t headers[13];
     int extrabytes;

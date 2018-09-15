@@ -274,6 +274,7 @@ void render_key_pressed(char key)
     else if (key == 'b')
     {
         auto pBitmap = bitmap_create_from_buffer(bufferData);
+        bitmap_write(pBitmap, "rayout.bmp");
     }
 }
 
