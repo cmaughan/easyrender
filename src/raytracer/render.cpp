@@ -1,11 +1,12 @@
 #include <thread>
-#include "glm/glm/glm.hpp"
+#include <glm/glm.hpp>
 
 #include "sceneobjects.h"
 #include "camera.h"
-#include "manipulator.h"
+#include "camera_manipulator.h"
 
 #include "device.h"
+#include "bitmap_utils.h"
 
 #define MAX_DEPTH 3
 
@@ -17,7 +18,7 @@ float cameraDistance = 8.0f;
 bool pause = false;
 bool step = true;
 int currentSample = 0;
-int partitions = 4;
+int partitions = std::thread::hardware_concurrency();
 
 void render_on_resize()
 {
@@ -209,7 +210,7 @@ void render_redraw()
         return;
 
     auto t = time(NULL);
-    std::srand((unsigned int)t);
+    std::srand(currentSample == 0 ? 0 : (unsigned int)t);
 
     std::vector<std::shared_ptr<std::thread>> threads;
 
@@ -225,7 +226,7 @@ void render_redraw()
                 for (int x = 0; x < bufferData.BufferWidth; x += 1)
                 {
                     glm::vec3 color{ 0.0f, 0.0f, 0.0f };
-                    auto offset = /*sample + */glm::vec2(x, y);
+                    auto offset = sample + glm::vec2(x, y);
 
                     auto ray = pCamera->GetWorldRay(offset);
                     color += TraceRay(ray.position, ray.direction, 0);
@@ -270,6 +271,10 @@ void render_key_pressed(char key)
     {
         step = true;
     }
+    else if (key == 'b')
+    {
+        auto pBitmap = bitmap_create_from_buffer(bufferData);
+    }
 }
 
 void render_key_down(char key)
@@ -300,10 +305,14 @@ void render_mouse_move(const glm::vec2& pos)
 void render_mouse_down(const glm::vec2& pos)
 {
     pManipulator->MouseDown(pos);
+    currentSample = 0;
+    step = true;
 }
 
 void render_mouse_up(const glm::vec2& pos)
 {
     pManipulator->MouseUp(pos);
+    currentSample = 0;
+    step = true;
 }
 

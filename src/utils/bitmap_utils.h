@@ -1,4 +1,6 @@
 #pragma once
+#include "device.h"
+#include <cstdio>
 
 // This header implements a simple bitmap object, with writing to a file.
 // It doesn't require any windows headers.
@@ -16,7 +18,7 @@ struct Bitmap
     Color* pData;
 };
 
-static Bitmap* CreateBitmap(int width, int height)
+static Bitmap* bitmap_create(int width, int height)
 {
     Bitmap* pBitmap = (Bitmap*)malloc(sizeof(Bitmap));
     pBitmap->width = width;
@@ -25,7 +27,25 @@ static Bitmap* CreateBitmap(int width, int height)
     return pBitmap;
 }
 
-static void DestroyBitmap(Bitmap* pBitmap)
+static Bitmap* bitmap_create_from_buffer(BufferData& data)
+{
+    auto pBitmap = bitmap_create(data.BufferWidth, data.BufferHeight);
+
+    for (int y = 0; y < int(data.BufferHeight); y++)
+    {
+        for (auto x = 0; x < int(data.BufferWidth); x++)
+        {
+            glm::u8vec4* pTarget = (glm::u8vec4*)((uint8_t*)pBitmap->pData + (y * pBitmap->width * sizeof(uint32_t) ) + (x * sizeof(uint32_t)));
+            glm::vec4 source = data.buffer[(y * bufferData.BufferWidth) + x];
+            source = glm::clamp(source, glm::vec4(0.0f), glm::vec4(1.0f));
+            source = glm::u8vec4(source * 255.0f);
+            *pTarget = source;
+        }
+    }
+    return pBitmap;
+}
+
+static void bitmap_destroy(Bitmap* pBitmap)
 {
     if (pBitmap)
     {
@@ -35,7 +55,7 @@ static void DestroyBitmap(Bitmap* pBitmap)
 }
 
 // Returns a dummy pixel for out of bounds
-static inline Color& GetPixel(Bitmap* pBitmap, int x, int y)
+static inline Color& bitmap_get_pixel(Bitmap* pBitmap, int x, int y)
 {
     if (x >= pBitmap->width ||
         y >= pBitmap->height ||
@@ -52,7 +72,7 @@ static inline Color& GetPixel(Bitmap* pBitmap, int x, int y)
 }
 
 // Ignores out of bounds pixels
-static inline void PutPixel(Bitmap* pBitmap, int x, int y, const Color& color)
+static inline void bitmap_put_pixel(Bitmap* pBitmap, int x, int y, const Color& color)
 {
 #ifdef DEBUG
     if (x >= pBitmap->width ||
@@ -70,13 +90,13 @@ static inline void PutPixel(Bitmap* pBitmap, int x, int y, const Color& color)
     col.blue = color.blue;
 }
 
-static void ClearBitmap(Bitmap* pBitmap, const Color& color)
+static void bitmap_set_color(Bitmap* pBitmap, const Color& color)
 {
     for (int y = 0; y < pBitmap->height; y++)
     {
         for (int x = 0; x < pBitmap->width; x++)
         {
-            PutPixel(pBitmap, x, y, color);
+            bitmap_put_pixel(pBitmap, x, y, color);
         }
     }
 }
@@ -85,10 +105,9 @@ This rather hacky function to write a bitmap is taken from here.
 Just give it the size of your array and the RGB (24Bit)
 https://en.wikipedia.org/wiki/User:Evercat/Buddhabrot.c
 */
-static void WriteBitmap(Bitmap* pBitmap, char * filename)
+static void write_bitmap(Bitmap* pBitmap, char * filename)
 {
     uint32_t headers[13];
-    FILE * outfile;
     int extrabytes;
     int paddedsize;
     int x; int y; int n;
@@ -122,7 +141,12 @@ static void WriteBitmap(Bitmap* pBitmap, char * filename)
     headers[11] = 0;                    // biClrUsed
     headers[12] = 0;                    // biClrImportant
 
-    outfile = fopen(filename, "wb");
+    FILE* outfile = nullptr;
+    if (fopen_s(&outfile, filename, "wb") != 0)
+    {
+        assert(!"Failed to write bitmap file!");
+        return;
+    }
 
     //
     // Headers begin...
@@ -163,7 +187,7 @@ static void WriteBitmap(Bitmap* pBitmap, char * filename)
         for (x = 0; x <= pBitmap->width - 1; x++)
         {
             // Also, it's written in (b,g,r) format...
-            Color& col = GetPixel(pBitmap, x, y);
+            Color& col = bitmap_get_pixel(pBitmap, x, y);
             fprintf(outfile, "%c", col.blue);
             fprintf(outfile, "%c", col.green);
             fprintf(outfile, "%c", col.red);

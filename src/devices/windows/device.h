@@ -1,7 +1,7 @@
 #pragma once
 
 #include <vector>
-#include "glm/glm/glm.hpp"
+#include <glm/glm.hpp>
 
 enum class DeviceKeyType
 {

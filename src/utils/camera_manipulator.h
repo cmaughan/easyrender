@@ -45,8 +45,9 @@ public:
                 spCamera->Orbit((currentPos - startPos) / 2.0f);
             }
             startPos = pos;
+            return true;
         }
-        return true;
+        return false;
     }
 
 };

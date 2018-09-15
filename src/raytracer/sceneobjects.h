@@ -1,6 +1,6 @@
 #pragma once
 
-#include "glm/glm/gtx/intersect.hpp"
+#include <glm/gtx/intersect.hpp>
 struct Material
 {
     glm::vec3 albedo;        // Base color of the surface

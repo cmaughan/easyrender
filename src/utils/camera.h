@@ -1,9 +1,9 @@
 #pragma once
 
 #include <algorithm>
-#include "glm/glm/gtx/rotate_vector.hpp"
-#include "glm/glm/gtc/quaternion.hpp"
-#include "glm/glm/gtc/random.hpp"
+#include <glm/gtx/rotate_vector.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtc/random.hpp>
 #include <string>
 
 /** Build a unit quaternion representing the rotation
@@ -149,9 +149,6 @@ public:
     {
         // Could move some of this maths out of here for speed, but this isn't time critical
         //glm::vec3 dir(viewDirection);
-       
-
-        auto lensRand = glm::circularRand(0.14f);
 
         auto dir = viewDirection;
         float x = ((imageSample.x * 2.0f) / filmWidth) - 1.0f;
@@ -165,12 +162,9 @@ public:
         float ft = (glm::length(focalPoint - position) - 1.0f) / glm::length(dir);
         glm::vec3 focasPoint = position + dir * ft;
 
-        glm::vec3 lensPoint = position;
-        lensPoint += (right * lensRand.x);
-        lensPoint += (up * lensRand.y);
-        dir = glm::normalize(focasPoint - lensPoint);
+        dir = glm::normalize(focasPoint - position);
 
-        return Ray{ lensPoint, dir };
+        return Ray{ position, dir };
     }
 
     void Dolly(float distance)
