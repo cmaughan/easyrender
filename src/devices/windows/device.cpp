@@ -88,8 +88,8 @@ void device_buffer_set_to_display(BufferData* data)
                     glm::vec4 source = data->buffer[(y * data->BufferWidth) + x];
                     source = glm::clamp(source, glm::vec4(0.0f), glm::vec4(1.0f));
 
-                    source = glm::u8vec4(source * 255.0f);
-                    *pTarget = source;
+                    glm::u8vec4 val = glm::u8vec4(source * 255.0f);
+                    *pTarget = glm::u8vec4(val.z, val.y, val.x, val.w);
                 }
             }
 

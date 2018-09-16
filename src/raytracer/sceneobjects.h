@@ -3,10 +3,13 @@
 #include <glm/gtx/intersect.hpp>
 struct Material
 {
-    glm::vec3 albedo;        // Base color of the surface
-    glm::vec3 specular;      // Specular reflection color
-    float reflectance;  // How reflective the surface is
-    glm::vec3 emissive;      // Light that the material emits
+    glm::vec3 albedo = glm::vec3(1.0f);                      // Base color of the surface
+    glm::vec3 specular = glm::vec3(0.0f, 0.0f, 0.0f);        // Specular reflection color
+    float specular_exponent = 3.0f;
+
+    float refractive_index = 1.0f;                           // Refractive Index
+    float opacity = 1.0f;
+    glm::vec3 emissive;                                      // Light that the material emits
 };
 
 enum class SceneObjectType
@@ -95,12 +98,12 @@ struct TiledPlane : Plane
     {
         normal = n;
         origin = o;
-        blackMat.reflectance = 0.2f;
-        blackMat.specular = glm::vec3(1.0f, 1.0f, 1.0f);
-        blackMat.albedo = glm::vec3(0.0f, 0.0f, 0.0f);
+        blackMat.refractive_index = 1.0f;
+        blackMat.specular = glm::vec3(0.2f, 0.2f, 0.2f);
+        blackMat.albedo = glm::vec3(1.0f, 0.0f, 0.0f);
 
-        whiteMat.reflectance = 0.3f;
-        whiteMat.specular = glm::vec3(1.0f, 1.0f, 1.0f);
+        whiteMat.refractive_index = 1.0f;
+        whiteMat.specular = glm::vec3(0.8f, 0.8f, 0.8f);
         whiteMat.albedo = glm::vec3(1.0f, 1.0f, 1.0f);
     }
 

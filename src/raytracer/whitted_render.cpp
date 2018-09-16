@@ -22,7 +22,7 @@ bool step = true;
 int currentSample = 0;
 int partitions = std::thread::hardware_concurrency();
 float bias = 0.001f;
-glm::vec3 backgroundColor = glm::vec3{ 0.0f, 0.0f, 0.0f };
+glm::vec3 backgroundColor = glm::vec3{ 0.05f, 0.05f, 0.1f };
 
 void render_init()
 {
@@ -34,34 +34,34 @@ void render_init()
     // Red ball
     Material mat;
     mat.albedo = glm::vec3(.7f, .1f, .1f);
-    mat.specular = glm::vec3(.9f, .1f, .1f);
-    mat.reflectance = 0.5f;
+    mat.specular = glm::vec3(.9f, .5f, .5f);
+    mat.refractive_index = 0.92f;
+    mat.opacity = .4f;
     sceneObjects.push_back(std::make_shared<Sphere>(mat, glm::vec3(0.0f, 2.0f, 0.f), 2.0f));
 
     // Purple ball
     mat.albedo = glm::vec3(0.7f, 0.0f, 0.7f);
     mat.specular = glm::vec3(0.9f, 0.9f, 0.8f);
-    mat.reflectance = 0.5f;
+    mat.refractive_index = .7f;
+    mat.opacity = 1.0f;
     sceneObjects.push_back(std::make_shared<Sphere>(mat, glm::vec3(-2.5f, 1.0f, 2.f), 1.0f));
+    mat.refractive_index = 1.0f;
 
     // Blue ball
     mat.albedo = glm::vec3(0.0f, 0.3f, 1.0f);
     mat.specular = glm::vec3(0.0f, 0.0f, 1.0f);
-    mat.reflectance = 0.0f;
     mat.emissive = glm::vec3(0.0f, 0.0f, 0.0f);
     sceneObjects.push_back(std::make_shared<Sphere>(mat, glm::vec3(0.0f, 0.5f, 3.f), 0.5f));
 
     // White ball
     mat.albedo = glm::vec3(1.0f, 1.0f, 1.0f);
     mat.specular = glm::vec3(0.0f, 0.0f, 0.0f);
-    mat.reflectance = .0f;
-    mat.emissive = glm::vec3(0.6f, 0.8f, 0.8f);
+    mat.emissive = glm::vec3(0.7f, 0.7f, 0.7f);
     sceneObjects.push_back(std::make_shared<Sphere>(mat, glm::vec3(2.8f, 0.8f, 2.0f), 0.8f));
 
     // White light
     mat.albedo = glm::vec3(0.0f, 0.8f, 0.0f);
     mat.specular = glm::vec3(0.0f, 0.0f, 0.0f);
-    mat.reflectance = 0.0f;
     mat.emissive = glm::vec3(.6f, 0.6f, 0.6f);
     sceneObjects.push_back(std::make_shared<Sphere>(mat, glm::vec3(-0.8f, 10.4f, 8.0f), 1.0f));
 
@@ -98,7 +98,55 @@ SceneObject* FindNearestObject(glm::vec3 rayorig, glm::vec3 raydir, float& neare
     return nearestObject;
 }
 
-glm::vec3 TraceRay(const glm::vec3& rayorig, const glm::vec3 &raydir, const int depth)
+glm::vec3 refract(const glm::vec3& I, const glm::vec3& N, const float &ior)
+{
+    float cosi = glm::clamp(glm::dot(I, N), -1.0f, 1.0f);
+    float etai = 1, etat = ior;
+    glm::vec3 n = N;
+    if (cosi < 0)
+    {
+        cosi = -cosi;
+    }
+    else
+    {
+        std::swap(etai, etat);
+        n = -N;
+    }
+    float eta = etai / etat;
+    float k = 1 - eta * eta * (1 - cosi * cosi);
+    return k < 0 ? glm::vec3(0.0f) : eta * I + (eta * cosi - sqrtf(k)) * n;
+}
+void fresnel(const glm::vec3& I, const glm::vec3& N, const float &ior, float &kr)
+{
+    float cosi = glm::clamp(glm::dot(I, N), -1.0f, 1.0f);
+    float etai = 1;
+    float etat = ior;
+    if (cosi > 0)
+    {
+        std::swap(etai, etat);
+    }
+
+    // Compute sini using Snell's law
+    float sint = etai / etat * sqrtf(std::max(0.f, 1 - cosi * cosi));
+
+    // Total internal reflection
+    if (sint >= 1)
+    {
+        kr = 1;
+    }
+    else
+    {
+        float cost = sqrtf(std::max(0.f, 1 - sint * sint));
+        cosi = fabsf(cosi);
+        float Rs = ((etat * cosi) - (etai * cost)) / ((etat * cosi) + (etai * cost));
+        float Rp = ((etai * cosi) - (etat * cost)) / ((etai * cosi) + (etat * cost));
+        kr = (Rs * Rs + Rp * Rp) / 2;
+    }
+    // As a consequence of the conservation of energy, transmittance is given by:
+    // kt = 1 - kr;
+}
+
+glm::vec3 TraceRay(const glm::vec3& ray_origin, const glm::vec3 &ray_dir, const int depth)
 {
     const SceneObject* nearestObject = nullptr;
     float distance;
@@ -111,7 +159,7 @@ glm::vec3 TraceRay(const glm::vec3& rayorig, const glm::vec3 &raydir, const int 
         return outputColor;
     }
 
-    nearestObject = FindNearestObject(rayorig, raydir, distance);
+    nearestObject = FindNearestObject(ray_origin, ray_dir, distance);
     if (!nearestObject)
     {
         // Didn't hit an object, so return background color
@@ -119,59 +167,66 @@ glm::vec3 TraceRay(const glm::vec3& rayorig, const glm::vec3 &raydir, const int 
     }
 
     // Where we hit on the surface
-    glm::vec3 hit_point = rayorig + (raydir * distance);
+    glm::vec3 hit_point = ray_origin + (ray_dir * distance);
 
     glm::vec3 normal = nearestObject->GetSurfaceNormal(hit_point);
     const Material& material = nearestObject->GetMaterial(hit_point);
 
-    if (material.reflectance > 0.0f)
+    if (material.refractive_index < 1.0f && material.opacity < 1.0f)
     {
-        //float kr; 
-        //fresnel(dir, N, hitObject->ior, kr); 
+        float kr;
+        fresnel(ray_dir, normal, material.refractive_index, kr);
 
-        glm::vec3 reflect_direction = glm::reflect(raydir, normal);
-        glm::vec3 reflect_origin;
+        glm::vec3 reflect_direction = normalize(glm::reflect(ray_dir, normal));
         auto reflect_start = (glm::dot(reflect_direction, normal) > 0) ? (hit_point + normal * bias) : (hit_point - normal * bias);
 
-        outputColor += TraceRay(reflect_start, reflect_direction, depth + 1) * material.reflectance;
+        glm::vec3 refract_direction = normalize(refract(ray_dir, normal, material.refractive_index));
+        auto refract_start = (glm::dot(refract_direction, normal) > 0) ? (hit_point + normal * bias) : (hit_point - normal * bias);
+
+        auto reflection_color = TraceRay(reflect_start, reflect_direction, depth + 1);
+        auto refraction_color = TraceRay(refract_start, refract_direction, depth + 1);
+
+        outputColor = reflection_color * kr + refraction_color * (1.0f - kr);
     }
 
+    if (material.opacity > 0.0f)
     {
         glm::vec3 light_accumulation = glm::vec3(0.0f);
+        glm::vec3 specular_accumulation = glm::vec3(0.0f);
 
         // For every emitter, gather the light
         for (auto& emitterObj : sceneObjects)
         {
             // Find the part of the object we hit
-            glm::vec3 emitterDir = emitterObj->GetRayFrom(hit_point);
+            glm::vec3 light_dir = emitterObj->GetRayFrom(hit_point);
             float light_distance;
-       
+
             // Move hit point out slightly
-            auto light_origin = (glm::dot(raydir, normal) < 0) ? (hit_point + normal * bias) : (hit_point - normal * bias);
+            auto light_origin = (glm::dot(ray_dir, normal) < 0) ? (hit_point + normal * bias) : (hit_point - normal * bias);
 
-            emitterObj->Intersects(light_origin + (emitterDir * bias), emitterDir, light_distance);
-            auto lightMaterial = emitterObj->GetMaterial(hit_point + emitterDir * light_distance);
+            emitterObj->Intersects(light_origin + (light_dir * bias), light_dir, light_distance);
+            auto lightMaterial = emitterObj->GetMaterial(hit_point + light_dir * light_distance);
 
+            // It's not a light!
             if (lightMaterial.emissive == glm::vec3(0.0f))
                 continue;
 
             float shadowFactor = 0.0f;
             float nearestDistance;
-            auto nearestOccluder = FindNearestObject(light_origin, emitterDir, nearestDistance);
-            if (nearestOccluder == nullptr || 
+            auto nearestOccluder = FindNearestObject(light_origin, light_dir, nearestDistance);
+            if (nearestOccluder == nullptr ||
                 nearestDistance > (light_distance))// - bias))
             {
                 shadowFactor = 1.0f;
             }
 
-            float l_dot_n = std::max(0.0f, dot(normal, emitterDir));
-            light_accumulation += (shadowFactor) * lightMaterial.emissive * l_dot_n; 
+            float l_dot_n = std::max(0.0f, dot(normal, light_dir));
+            light_accumulation += (shadowFactor) * lightMaterial.emissive * l_dot_n;
 
-            //Vec3f reflectionDirection = reflect(-lightDir, N); 
-            //specularColor += powf(std::max(0.f, -dotProduct(reflectionDirection, dir)), hitObject->specularExponent) * lights[i]->intensity;
-
+            auto light_reflect_dir = glm::reflect(-light_dir, normal);
+            specular_accumulation += powf(std::max(0.0f, -glm::dot(light_reflect_dir, ray_dir)), material.specular_exponent) * lightMaterial.emissive;
         }
-        outputColor += (light_accumulation * material.albedo) + material.emissive + (material.specular * 0.0f);
+        outputColor += (light_accumulation * material.albedo * material.opacity) + material.emissive + (material.specular * specular_accumulation * material.opacity);
     }
     return outputColor;
 }
@@ -190,8 +245,8 @@ void render_redraw()
     if (!screenBufferData)
     {
         screenBufferData = device_buffer_create();
-        device_buffer_ensure_screen_size(screenBufferData);
     }
+    device_buffer_ensure_screen_size(screenBufferData);
 
     auto t = time(NULL);
     std::srand(currentSample == 0 ? 0 : (unsigned int)t);
