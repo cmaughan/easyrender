@@ -8,7 +8,7 @@
 #include "device.h"
 #include "bitmap_utils.h"
 
-#define MAX_DEPTH 3
+#define MAX_DEPTH 4
 
 std::vector<std::shared_ptr<SceneObject>> sceneObjects;
 std::vector<std::shared_ptr<SceneObject>> lightObjects;
@@ -36,14 +36,14 @@ void render_init()
     mat.albedo = glm::vec3(.7f, .1f, .1f);
     mat.specular = glm::vec3(.9f, .5f, .5f);
     mat.refractive_index = 0.92f;
-    mat.opacity = .4f;
+    mat.opacity = .2f;
     sceneObjects.push_back(std::make_shared<Sphere>(mat, glm::vec3(0.0f, 2.0f, 0.f), 2.0f));
 
     // Purple ball
     mat.albedo = glm::vec3(0.7f, 0.0f, 0.7f);
     mat.specular = glm::vec3(0.9f, 0.9f, 0.8f);
-    mat.refractive_index = .7f;
-    mat.opacity = 1.0f;
+    mat.refractive_index = .90f;
+    mat.opacity = 0.66f;
     sceneObjects.push_back(std::make_shared<Sphere>(mat, glm::vec3(-2.5f, 1.0f, 2.f), 1.0f));
     mat.refractive_index = 1.0f;
 
@@ -56,13 +56,13 @@ void render_init()
     // White ball
     mat.albedo = glm::vec3(1.0f, 1.0f, 1.0f);
     mat.specular = glm::vec3(0.0f, 0.0f, 0.0f);
-    mat.emissive = glm::vec3(0.7f, 0.7f, 0.7f);
+    mat.emissive = glm::vec3(0.7f, 0.8f, 0.8f);
     sceneObjects.push_back(std::make_shared<Sphere>(mat, glm::vec3(2.8f, 0.8f, 2.0f), 0.8f));
 
     // White light
     mat.albedo = glm::vec3(0.0f, 0.8f, 0.0f);
     mat.specular = glm::vec3(0.0f, 0.0f, 0.0f);
-    mat.emissive = glm::vec3(.6f, 0.6f, 0.6f);
+    mat.emissive = glm::vec3(.9f, 0.9f, 0.9f);
     sceneObjects.push_back(std::make_shared<Sphere>(mat, glm::vec3(-0.8f, 10.4f, 8.0f), 1.0f));
 
     sceneObjects.push_back(std::make_shared<TiledPlane>(glm::vec3(0.0f, 0.0f, 0.0f), normalize(glm::vec3(0.0f, 1.0f, 0.0f))));
@@ -186,7 +186,7 @@ glm::vec3 TraceRay(const glm::vec3& ray_origin, const glm::vec3 &ray_dir, const 
         auto reflection_color = TraceRay(reflect_start, reflect_direction, depth + 1);
         auto refraction_color = TraceRay(refract_start, refract_direction, depth + 1);
 
-        outputColor = reflection_color * kr + refraction_color * (1.0f - kr);
+        outputColor = (reflection_color * kr + refraction_color * (1.0f - kr)) * (1.0f - material.opacity);
     }
 
     if (material.opacity > 0.0f)
@@ -211,13 +211,18 @@ glm::vec3 TraceRay(const glm::vec3& ray_origin, const glm::vec3 &ray_dir, const 
             if (lightMaterial.emissive == glm::vec3(0.0f))
                 continue;
 
-            float shadowFactor = 0.0f;
+            float shadowFactor = 1.0f;
             float nearestDistance;
             auto nearestOccluder = FindNearestObject(light_origin, light_dir, nearestDistance);
-            if (nearestOccluder == nullptr ||
-                nearestDistance > (light_distance))// - bias))
+            if (nearestOccluder != nullptr)
             {
-                shadowFactor = 1.0f;
+                if (nearestDistance < (light_distance))// - bias))
+                {
+                    // Quick fix for shadows through non-opaque objects!
+                    auto occluderMat = nearestOccluder->GetMaterial(hit_point + light_dir * nearestDistance);
+                    shadowFactor -= occluderMat.opacity;
+                    shadowFactor = std::max(0.0f, shadowFactor);
+                }
             }
 
             float l_dot_n = std::max(0.0f, dot(normal, light_dir));
