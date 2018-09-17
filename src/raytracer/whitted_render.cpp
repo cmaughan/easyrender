@@ -8,13 +8,14 @@
 #include "device.h"
 #include "bitmap_utils.h"
 
-#define MAX_DEPTH 5
+#define MAX_DEPTH 6
 
 std::vector<std::shared_ptr<SceneObject>> sceneObjects;
 std::vector<std::shared_ptr<SceneObject>> lightObjects;
 std::shared_ptr<Camera> pCamera;
 std::shared_ptr<Manipulator> pManipulator;
 BufferData* screenBufferData;
+SceneObject* pMoveLight = nullptr;
 
 float cameraDistance = 8.0f;
 bool pause = false;
@@ -35,10 +36,10 @@ void render_init()
 
     // Red ball
     Material mat;
-    mat.albedo = glm::vec3(.7f, .1f, .1f);
-    mat.specular = glm::vec3(.9f, .5f, .5f);
+    mat.albedo = glm::vec3(.2f, .8f, .2f);
+    mat.specular = glm::vec3(1.0f, .7f, .5f);
     mat.refractive_index = .95f;
-    mat.opacity = .06f;
+    mat.opacity = .36f;
     sceneObjects.push_back(std::make_shared<Sphere>(mat, glm::vec3(0.0f, 2.0f, 0.f), 2.0f));
 
     // Purple ball
@@ -61,14 +62,15 @@ void render_init()
     // White ball
     mat.albedo = glm::vec3(1.0f, 1.0f, 1.0f);
     mat.specular = glm::vec3(0.0f, 0.0f, 0.0f);
-    mat.emissive = glm::vec3(0.3f, 0.5f, 0.5f);
-    sceneObjects.push_back(std::make_shared<Sphere>(mat, glm::vec3(2.8f, 0.8f, 2.0f), 0.8f));
+    mat.emissive = glm::vec3(2.0f, 2.0f, 2.0f);
+    sceneObjects.push_back(std::make_shared<Sphere>(mat, glm::vec3(1.8f, 0.8f, 2.0f), 0.8f));
+    pMoveLight = sceneObjects[sceneObjects.size() - 1].get();
 
     // White light
     mat.albedo = glm::vec3(0.0f, 0.8f, 0.0f);
     mat.specular = glm::vec3(0.0f, 0.0f, 0.0f);
     mat.emissive = glm::vec3(.7f, 0.7f, 0.7f);
-    sceneObjects.push_back(std::make_shared<Sphere>(mat, glm::vec3(-0.8f, 10.4f, 8.0f), 1.0f));
+    sceneObjects.push_back(std::make_shared<Sphere>(mat, glm::vec3(-1.8f, 7.4f, 7.0f), 1.0f));
 
     sceneObjects.push_back(std::make_shared<TiledPlane>(glm::vec3(0.0f, 0.0f, 0.0f), normalize(glm::vec3(0.0f, 1.0f, 0.0f))));
 
@@ -194,7 +196,7 @@ glm::vec3 TraceRay(const glm::vec3& ray_origin, const glm::vec3 &ray_dir, const 
         auto reflection_color = TraceRay(reflect_start, reflect_direction, depth + 1);
         auto refraction_color = TraceRay(refract_start, refract_direction, depth + 1);
 
-        outputColor = (reflection_color * kr + refraction_color * (1.0f - kr)) * (1.0f - material.opacity);
+        outputColor = (reflection_color * kr + refraction_color * (1.0f - kr)) * (1.0f - material.opacity) + material.emissive;
     }
 
     if (material.opacity > 0.0f)
@@ -236,7 +238,7 @@ glm::vec3 TraceRay(const glm::vec3& ray_origin, const glm::vec3 &ray_dir, const 
             float l_dot_n = std::max(0.0f, dot(normal, light_dir));
             light_accumulation += (shadowFactor) * lightMaterial.emissive * l_dot_n;
 
-            auto light_reflect_dir = glm::reflect(-light_dir, normal);
+            auto light_reflect_dir = glm::normalize(glm::reflect(-light_dir, normal));
             specular_accumulation += powf(std::max(0.0f, -glm::dot(light_reflect_dir, ray_dir)), material.specular_exponent) * lightMaterial.emissive;
         }
         outputColor += (light_accumulation * material.albedo * material.opacity) + material.emissive + (material.specular * specular_accumulation * material.opacity);
@@ -337,11 +339,17 @@ void render_key_pressed(char key)
     }
     else if (key == 'd')
     {
-        deviceParams.offset.x += .1f;
+        auto pSphere = (Sphere*)pMoveLight;
+        pSphere->center.x += .1f;
+        currentSample = 0;
+        step = true;
     }
     else if (key == 'a')
     {
-        deviceParams.offset.x -= .1f;
+        auto pSphere = (Sphere*)pMoveLight;
+        pSphere->center.x -= .1f;
+        currentSample = 0;
+        step = true;
     }
 }
 
