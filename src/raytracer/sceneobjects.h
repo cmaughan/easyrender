@@ -99,11 +99,13 @@ struct TiledPlane : Plane
         normal = n;
         origin = o;
         blackMat.refractive_index = 1.0f;
-        blackMat.specular = glm::vec3(0.2f, 0.2f, 0.2f);
+        blackMat.opacity = .8f;
+        blackMat.specular = glm::vec3(0.1f, 0.1f, 0.1f);
         blackMat.albedo = glm::vec3(1.0f, 0.0f, 0.0f);
 
         whiteMat.refractive_index = 1.0f;
-        whiteMat.specular = glm::vec3(0.8f, 0.8f, 0.8f);
+        whiteMat.opacity = .8f;
+        whiteMat.specular = glm::vec3(0.2f, 0.2f, 0.2f);
         whiteMat.albedo = glm::vec3(1.0f, 1.0f, 1.0f);
     }
 

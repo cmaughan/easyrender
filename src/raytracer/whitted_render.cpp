@@ -8,7 +8,7 @@
 #include "device.h"
 #include "bitmap_utils.h"
 
-#define MAX_DEPTH 4
+#define MAX_DEPTH 5
 
 std::vector<std::shared_ptr<SceneObject>> sceneObjects;
 std::vector<std::shared_ptr<SceneObject>> lightObjects;
@@ -21,8 +21,10 @@ bool pause = false;
 bool step = true;
 int currentSample = 0;
 int partitions = std::thread::hardware_concurrency();
+
+glm::vec3 backgroundColor = glm::vec3{ 135.0f / 255.0f, 206.0f / 255.0f, 235.0f / 255.0f };
+glm::vec3 backgroundColor2 = glm::vec3{ 135.0f / 255.0f, 206.0f / 255.0f, 235.0f / 255.0f } * .75f;
 float bias = 0.001f;
-glm::vec3 backgroundColor = glm::vec3{ 0.05f, 0.05f, 0.1f };
 
 void render_init()
 {
@@ -35,34 +37,37 @@ void render_init()
     Material mat;
     mat.albedo = glm::vec3(.7f, .1f, .1f);
     mat.specular = glm::vec3(.9f, .5f, .5f);
-    mat.refractive_index = 0.92f;
-    mat.opacity = .2f;
+    mat.refractive_index = .95f;
+    mat.opacity = .06f;
     sceneObjects.push_back(std::make_shared<Sphere>(mat, glm::vec3(0.0f, 2.0f, 0.f), 2.0f));
 
     // Purple ball
     mat.albedo = glm::vec3(0.7f, 0.0f, 0.7f);
     mat.specular = glm::vec3(0.9f, 0.9f, 0.8f);
-    mat.refractive_index = .90f;
-    mat.opacity = 0.66f;
+    mat.refractive_index = .991f;
+    mat.opacity = 0.6f;
     sceneObjects.push_back(std::make_shared<Sphere>(mat, glm::vec3(-2.5f, 1.0f, 2.f), 1.0f));
     mat.refractive_index = 1.0f;
+    mat.opacity = 1.0f;
 
     // Blue ball
     mat.albedo = glm::vec3(0.0f, 0.3f, 1.0f);
-    mat.specular = glm::vec3(0.0f, 0.0f, 1.0f);
+    mat.specular = glm::vec3(0.0f, 0.2f, 1.0f);
     mat.emissive = glm::vec3(0.0f, 0.0f, 0.0f);
-    sceneObjects.push_back(std::make_shared<Sphere>(mat, glm::vec3(0.0f, 0.5f, 3.f), 0.5f));
+    mat.specular_exponent = 35;
+    sceneObjects.push_back(std::make_shared<Sphere>(mat, glm::vec3(-1.0f, 0.7f, 3.f), 0.7f));
+   
 
     // White ball
     mat.albedo = glm::vec3(1.0f, 1.0f, 1.0f);
     mat.specular = glm::vec3(0.0f, 0.0f, 0.0f);
-    mat.emissive = glm::vec3(0.7f, 0.8f, 0.8f);
+    mat.emissive = glm::vec3(0.3f, 0.5f, 0.5f);
     sceneObjects.push_back(std::make_shared<Sphere>(mat, glm::vec3(2.8f, 0.8f, 2.0f), 0.8f));
 
     // White light
     mat.albedo = glm::vec3(0.0f, 0.8f, 0.0f);
     mat.specular = glm::vec3(0.0f, 0.0f, 0.0f);
-    mat.emissive = glm::vec3(.9f, 0.9f, 0.9f);
+    mat.emissive = glm::vec3(.7f, 0.7f, 0.7f);
     sceneObjects.push_back(std::make_shared<Sphere>(mat, glm::vec3(-0.8f, 10.4f, 8.0f), 1.0f));
 
     sceneObjects.push_back(std::make_shared<TiledPlane>(glm::vec3(0.0f, 0.0f, 0.0f), normalize(glm::vec3(0.0f, 1.0f, 0.0f))));
@@ -116,6 +121,7 @@ glm::vec3 refract(const glm::vec3& I, const glm::vec3& N, const float &ior)
     float k = 1 - eta * eta * (1 - cosi * cosi);
     return k < 0 ? glm::vec3(0.0f) : eta * I + (eta * cosi - sqrtf(k)) * n;
 }
+
 void fresnel(const glm::vec3& I, const glm::vec3& N, const float &ior, float &kr)
 {
     float cosi = glm::clamp(glm::dot(I, N), -1.0f, 1.0f);
@@ -151,20 +157,22 @@ glm::vec3 TraceRay(const glm::vec3& ray_origin, const glm::vec3 &ray_dir, const 
     const SceneObject* nearestObject = nullptr;
     float distance;
 
-    glm::vec3 outputColor = backgroundColor;
+    glm::vec3 back = glm::mix(backgroundColor, backgroundColor2, 1.0f - glm::clamp(glm::dot(ray_dir, glm::vec3(0.0f, 1.0f, 0.0f)), 0.0f, 1.0f));
 
     // Too deep
     if (depth > MAX_DEPTH)
     {
-        return outputColor;
+        return back;
     }
 
     nearestObject = FindNearestObject(ray_origin, ray_dir, distance);
     if (!nearestObject)
     {
         // Didn't hit an object, so return background color
-        return outputColor;
+        return back;
     }
+
+    glm::vec3 outputColor = glm::vec3(0.0f, 0.0f, 0.0f);
 
     // Where we hit on the surface
     glm::vec3 hit_point = ray_origin + (ray_dir * distance);
@@ -172,7 +180,7 @@ glm::vec3 TraceRay(const glm::vec3& ray_origin, const glm::vec3 &ray_dir, const 
     glm::vec3 normal = nearestObject->GetSurfaceNormal(hit_point);
     const Material& material = nearestObject->GetMaterial(hit_point);
 
-    if (material.refractive_index < 1.0f && material.opacity < 1.0f)
+    if (material.refractive_index != 1.0f && material.opacity < 1.0f)
     {
         float kr;
         fresnel(ray_dir, normal, material.refractive_index, kr);
