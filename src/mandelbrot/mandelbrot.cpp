@@ -58,10 +58,10 @@ void render_redraw()
                     auto c = screen_to_complex(x, y);
                     auto current = std::complex<double>(0.0f, 0.0f);
                     int i = 0;
-                    while (i < 400)
+                    while (i < 1000)
                     {
                         current = current * current + c;
-                        if (std::abs(current * current) > 4.0)
+                        if (std::norm(current) > 4.0)
                             break;
                         i++;
                     }
@@ -134,8 +134,8 @@ void render_mouse_down(const glm::vec2& pos, bool right)
 
     if (!right)
     {
-        TopLeft = c - range * .25;
-        BottomRight = c + range * .25;
+        TopLeft = c - range * .33;
+        BottomRight = c + range * .33;
     }
     else
     {
