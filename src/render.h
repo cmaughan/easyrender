@@ -13,5 +13,5 @@ void render_destroy();
 void render_key_pressed(char key);
 void render_key_down(char key);
 void render_mouse_move(const glm::vec2& pos);
-void render_mouse_down(const glm::vec2& pos);
+void render_mouse_down(const glm::vec2& pos, bool right = false);
 void render_mouse_up(const glm::vec2& pos);

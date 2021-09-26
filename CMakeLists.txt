@@ -57,5 +57,11 @@ src/game_of_life/life_render.cpp
 INCLUDE_DIRECTORIES(src/game_of_life)
 ADD_EXECUTABLE (game_of_life WIN32 ${GOL_SOURCES} ${DEVICE_SOURCES}) # Win32 ignored on non-windows
 
+# Mandelbrot
+SET(BROT_SOURCES 
+src/mandelbrot/mandelbrot.cpp
+)
+INCLUDE_DIRECTORIES(src/mandelbrot)
+ADD_EXECUTABLE (mandelbrot WIN32 ${BROT_SOURCES} ${DEVICE_SOURCES}) # Win32 ignored on non-windows
 
 SOURCE_GROUP(Device REGULAR_EXPRESSION ".*(device)+")

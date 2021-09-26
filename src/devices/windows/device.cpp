@@ -212,6 +212,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message,
         ReleaseCapture();
     }
     break;
+    
+    case WM_RBUTTONDOWN:
+    {
+        auto xPos = GET_X_LPARAM(lParam);
+        auto yPos = GET_Y_LPARAM(lParam);
+        render_mouse_down(glm::vec2(xPos, yPos), true);
+        SetCapture(hWnd);
+    }
+    break;
 
     case WM_SIZE:
     {

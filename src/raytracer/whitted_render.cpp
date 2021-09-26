@@ -378,7 +378,7 @@ void render_mouse_move(const glm::vec2& pos)
     }
 }
 
-void render_mouse_down(const glm::vec2& pos)
+void render_mouse_down(const glm::vec2& pos, bool right)
 {
     pManipulator->MouseDown(pos);
     currentSample = 0;
