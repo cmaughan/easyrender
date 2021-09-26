@@ -45,23 +45,23 @@ void render_redraw()
     };
 
 
+    auto scale = float(std::abs(std::hypot(real(BottomRight - TopLeft), imag(BottomRight - TopLeft))));
     int partitions = 32;
     std::vector<std::thread> threads;
     for (int t = 0; t < partitions; t++)
     {
         threads.push_back(std::thread([=]() {
-            for (int y = t; y < screenBufferData->BufferHeight; y+=32)
+            for (int y = t; y < screenBufferData->BufferHeight; y+=partitions)
             {
                 for (int x = 0; x < screenBufferData->BufferWidth; x++)
                 {
                     auto c = screen_to_complex(x, y);
-
                     auto current = std::complex<double>(0.0f, 0.0f);
                     int i = 0;
-                    while (i < 200)
+                    while (i < 400)
                     {
                         current = current * current + c;
-                        if (std::abs(current) > 1000.0)
+                        if (std::abs(current * current) > 4.0)
                             break;
                         i++;
                     }
@@ -142,6 +142,11 @@ void render_mouse_down(const glm::vec2& pos, bool right)
         TopLeft = c - range ;
         BottomRight = c + range;
     }
+    
+    auto cNew = screen_to_complex(int(pos.x), int(pos.y));
+    auto diff = c - cNew;
+    TopLeft += diff;
+    BottomRight += diff;
 }
 
 void render_mouse_up(const glm::vec2& pos)
